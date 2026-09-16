@@ -1,11 +1,11 @@
 import os
 from contextlib import asynccontextmanager
-
+from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, models
+from . import auth, models, projects
 from .database import Base, engine
 
 load_dotenv()
@@ -37,8 +37,10 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-
-
+app.include_router(projects.router)
+@app.get("/", include_in_schema=False)
+def home():
+    return RedirectResponse(url="/docs")
 @app.get("/health")
 def health() -> dict[str, str]:
     return {
