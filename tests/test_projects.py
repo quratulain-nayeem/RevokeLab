@@ -200,3 +200,41 @@ def test_revocation_blocks_and_grant_restores_access(client: TestClient):
 
     login(client, "alice", "alice-test-password")
     assert client.get("/projects/1").status_code == 200
+    
+def test_experiment_creation_is_safe_to_retry(client: TestClient):
+    login(client, "alice", "alice-test-password")
+
+    headers = {"Idempotency-Key": "automated-test-001"}
+    payload = {
+        "project_id": 1,
+        "authorization_mode": "continuous",
+        "cutoff_seconds": 2,
+    }
+
+    first = client.post("/experiments", headers=headers, json=payload)
+    second = client.post("/experiments", headers=headers, json=payload)
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert second.json()["id"] == first.json()["id"]
+
+    changed = client.post(
+        "/experiments",
+        headers=headers,
+        json={**payload, "cutoff_seconds": 3},
+    )
+    assert changed.status_code == 409
+
+
+def test_experiment_creation_requires_authentication(client: TestClient):
+    response = client.post(
+        "/experiments",
+        headers={"Idempotency-Key": "unauthorized-test-001"},
+        json={
+            "project_id": 1,
+            "authorization_mode": "continuous",
+            "cutoff_seconds": 2,
+        },
+    )
+
+    assert response.status_code == 401
