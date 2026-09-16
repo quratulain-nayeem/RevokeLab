@@ -89,3 +89,92 @@ class Message(Base):
 
     project: Mapped["Project"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship(back_populates="sent_messages")
+    
+class ExperimentRun(Base):
+    __tablename__ = "experiment_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "idempotency_key",
+            name="uq_experiment_runs_owner_idempotency",
+        ),
+        CheckConstraint(
+            "authorization_mode IN ('connection-only', 'continuous')",
+            name="ck_experiment_runs_authorization_mode",
+        ),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed')",
+            name="ck_experiment_runs_status",
+        ),
+        CheckConstraint(
+            "cutoff_seconds BETWEEN 1 AND 60",
+            name="ck_experiment_runs_cutoff",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"))
+    idempotency_key: Mapped[str] = mapped_column(String(100))
+    authorization_mode: Mapped[str] = mapped_column(String(30))
+    cutoff_seconds: Mapped[int] = mapped_column(default=5)
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="queued",
+        index=True,
+    )
+    attempt_count: Mapped[int] = mapped_column(default=0)
+    max_attempts: Mapped[int] = mapped_column(default=3)
+    result: Mapped[str | None] = mapped_column(String(30))
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    owner: Mapped["User"] = relationship()
+    project: Mapped["Project"] = relationship()
+    events: Mapped[list["ExperimentEvent"]] = relationship(
+        back_populates="experiment",
+        cascade="all, delete-orphan",
+        order_by="ExperimentEvent.sequence",
+    )
+
+
+class ExperimentEvent(Base):
+    __tablename__ = "experiment_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "experiment_id",
+            "sequence",
+            name="uq_experiment_events_sequence",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    experiment_id: Mapped[int] = mapped_column(
+        ForeignKey("experiment_runs.id")
+    )
+    sequence: Mapped[int]
+    event_type: Mapped[str] = mapped_column(String(50))
+    detail: Mapped[str] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+    )
+
+    experiment: Mapped["ExperimentRun"] = relationship(
+        back_populates="events"
+    )
