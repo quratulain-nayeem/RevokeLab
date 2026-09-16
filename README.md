@@ -246,5 +246,46 @@ Deploy it as a Render Blueprint and provide the three requested test-account pas
 ## Current limitations
 
 This portfolio version intentionally uses one worker process. Multiple workers would require transactional row claiming, such as PostgreSQL `FOR UPDATE SKIP LOCKED`.
+## Named database constraints
 
+| Constraint | Rule enforced |
+|---|---|
+| `users.username UNIQUE` | Prevents two accounts from using the same username |
+| `ck_users_valid_role` | Allows only `member` or `admin` roles |
+| `uq_memberships_user_project` | Prevents duplicate membership rows |
+| `ck_memberships_valid_status` | Allows only `active` or `revoked` membership states |
+| `messages.message_code UNIQUE` | Prevents duplicate messages when a request is retried |
+| `uq_experiment_runs_owner_idempotency` | Prevents one user from creating duplicate jobs with the same idempotency key |
+| `ck_experiment_runs_authorization_mode` | Restricts experiments to supported authorization modes |
+| `ck_experiment_runs_status` | Restricts jobs to valid lifecycle states |
+| `ck_experiment_runs_cutoff` | Requires a cutoff between 1 and 60 seconds |
+| `uq_experiment_events_sequence` | Prevents duplicate timeline positions within an experiment |
+| Foreign-key constraints | Prevent orphaned memberships, messages, experiments, and timeline events |
+
+## Load-bearing query and query plan
+
+The worker repeatedly claims the oldest queued or interrupted experiment:
+
+```sql
+SELECT id, status, created_at
+FROM experiment_runs
+WHERE status IN ('queued', 'running')
+ORDER BY created_at
+LIMIT 1;
+```
+
+Measured locally with SQLite `EXPLAIN QUERY PLAN`:
+
+```text
+SEARCH experiment_runs USING INDEX ix_experiment_runs_status (status=?)
+USE TEMP B-TREE FOR ORDER BY
+```
+
+The `ix_experiment_runs_status` index avoids scanning completed experiments. However, SQLite still creates a temporary B-tree to order matching jobs by creation time.
+
+## What would fail first at ten times the data?
+
+The worker-claim query would degrade first as the queue grows. Its status index filters eligible jobs, but it does not satisfy the `ORDER BY created_at`, so increasingly large queued-job sets must be sorted repeatedly.
+
+At higher scale, I would add a composite index on `(status, created_at)` and use PostgreSQL transactional claiming with `FOR UPDATE SKIP LOCKED`. That would allow multiple workers to claim different jobs safely without duplicate processing or repeated full queue sorting.
 The current integration targets HTTP and WebSocket access paths. Future versions could add permission-cache invalidation, background task credentials, multi-instance testing, and controlled network fault injection.
