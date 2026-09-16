@@ -18,7 +18,7 @@ from app.models import Membership, Project, User
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     test_engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -30,6 +30,10 @@ def client():
         connection.execute("PRAGMA foreign_keys = ON")
 
     TestingSession = sessionmaker(bind=test_engine)
+    monkeypatch.setattr(
+        "app.realtime.SessionLocal",
+        TestingSession,
+    )
     Base.metadata.create_all(test_engine)
 
     with TestingSession() as database:
@@ -92,7 +96,64 @@ def login(client: TestClient, username: str, password: str) -> None:
     )
     assert response.status_code == 200
 
+def test_connection_only_socket_leaks_message_after_revocation(
+    client: TestClient,
+):
+    login(client, "alice", "alice-test-password")
 
+    with client.websocket_connect(
+        "/ws/connection-only/projects/1"
+    ) as websocket:
+        connected = websocket.receive_json()
+        assert connected["type"] == "connected"
+
+        login(client, "admin", "admin-test-password")
+        client.post("/projects/1/members/2/revoke")
+
+        response = client.post(
+            "/projects/1/messages",
+            json={
+                "message_code": "DEMO-LEAK",
+                "content": "Created after Alice was removed",
+            },
+        )
+        assert response.status_code == 201
+
+        leaked_message = websocket.receive_json()
+        assert leaked_message["type"] == "private_message"
+        assert leaked_message["message"]["message_code"] == "DEMO-LEAK"
+
+    client.post("/projects/1/members/2/grant")
+
+
+def test_continuous_socket_blocks_message_after_revocation(
+    client: TestClient,
+):
+    login(client, "alice", "alice-test-password")
+
+    with client.websocket_connect(
+        "/ws/continuous/projects/1"
+    ) as websocket:
+        connected = websocket.receive_json()
+        assert connected["type"] == "connected"
+
+        login(client, "admin", "admin-test-password")
+        client.post("/projects/1/members/2/revoke")
+
+        response = client.post(
+            "/projects/1/messages",
+            json={
+                "message_code": "DEMO-BLOCKED",
+                "content": "Alice must not receive this",
+            },
+        )
+        assert response.status_code == 201
+
+        revocation_notice = websocket.receive_json()
+        assert revocation_notice["type"] == "access_revoked"
+        assert "removed" in revocation_notice["detail"]
+
+    client.post("/projects/1/members/2/grant")
 def test_bob_cannot_read_project(client: TestClient):
     login(client, "bob", "bob-test-password")
 
