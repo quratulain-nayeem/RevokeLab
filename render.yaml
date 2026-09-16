@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: revokelab
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python seed.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: revokelab-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: REVOKELAB_SESSION_SECRET
+        generateValue: true
+      - key: REVOKELAB_ADMIN_USERNAME
+        value: admin
+      - key: REVOKELAB_ADMIN_PASSWORD
+        sync: false
+      - key: REVOKELAB_ALICE_USERNAME
+        value: alice
+      - key: REVOKELAB_ALICE_PASSWORD
+        sync: false
+      - key: REVOKELAB_BOB_PASSWORD
+        sync: false
+      - key: REVOKELAB_RUN_WORKER
+        value: "true"
+      - key: REVOKELAB_SECURE_COOKIES
+        value: "true"
+
+databases:
+  - name: revokelab-db
+    plan: free
+    databaseName: revokelab
+    user: revokelab

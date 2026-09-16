@@ -1,3 +1,5 @@
+import os
+import sys
 from getpass import getpass
 
 from sqlalchemy import select
@@ -7,21 +9,32 @@ from app.database import Base, SessionLocal, engine
 from app.models import Membership, Project, User
 
 
+def get_password(username: str) -> str:
+    variable = f"REVOKELAB_{username.upper()}_PASSWORD"
+    password = os.getenv(variable)
+
+    if not password and sys.stdin.isatty():
+        password = getpass(f"Choose a test password for {username}: ")
+
+    if not password or len(password) < 12:
+        raise RuntimeError(
+            f"{variable} must contain at least 12 characters"
+        )
+
+    return password
+
+
 def get_or_create_user(database, username: str, role: str) -> User:
-    existing_user = database.scalar(
+    existing = database.scalar(
         select(User).where(User.username == username)
     )
-    if existing_user:
+    if existing:
         print(f"{username} already exists")
-        return existing_user
-
-    password = getpass(f"Choose a test password for {username}: ")
-    if len(password) < 12:
-        raise ValueError("Test passwords must contain at least 12 characters")
+        return existing
 
     user = User(
         username=username,
-        password_hash=hash_password(password),
+        password_hash=hash_password(get_password(username)),
         role=role,
     )
     database.add(user)

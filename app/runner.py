@@ -44,7 +44,16 @@ def required_setting(name: str) -> str:
         raise RuntimeError(f"{name} is not configured")
     return value
 
+def service_base_url() -> str:
+    configured_url = os.getenv("REVOKELAB_BASE_URL")
+    if configured_url:
+        base_url = service_base_url()
 
+    render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+    if render_hostname:
+        return f"https://{render_hostname}"
+
+    raise RuntimeError("REVOKELAB_BASE_URL is not configured")
 async def login(
     client: httpx.AsyncClient,
     username: str,
