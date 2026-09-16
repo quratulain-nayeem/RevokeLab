@@ -5,7 +5,7 @@ RevokeLab is a running-system authorization testing service that detects access 
 It opens an authenticated live connection, revokes the user, creates new private data after a declared cutoff, and records whether that data still reaches the removed user.
 
 - Repository: https://github.com/quratulain-nayeem/RevokeLab
-- Live API: Added after deployment
+- Live API: https://revokelab.onrender.com
 - Interactive API documentation: `/docs`
 - Health check: `/health`
 
