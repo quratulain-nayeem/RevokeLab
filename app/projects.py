@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
+from .realtime import manager
 from .auth import require_user
 from .database import get_db
 from .models import Membership, Message, Project, User, utc_now
@@ -79,7 +79,7 @@ def read_project(
 
 
 @router.post("/{project_id}/messages", status_code=201)
-def create_message(
+async def create_message(
     project_id: int,
     payload: MessageCreate,
     response: Response,
@@ -122,7 +122,18 @@ def create_message(
     database.add(message)
     database.commit()
     database.refresh(message)
-
+    await manager.broadcast(
+        project_id,
+        {
+            "type": "private_message",
+            "message": {
+                "id": message.id,
+                "message_code": message.message_code,
+                "content": message.content,
+                "created_at": message.created_at.isoformat(),
+            },
+        },
+    )
     return {
         "id": message.id,
         "message_code": message.message_code,
