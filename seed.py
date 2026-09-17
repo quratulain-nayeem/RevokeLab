@@ -9,6 +9,7 @@ from app.database import Base, SessionLocal, engine
 from app.models import Membership, Project, User
 
 
+def get_or_create_user(database, username: str, role: str) -> User:
 def get_password(username: str) -> str:
     variable = f"REVOKELAB_{username.upper()}_PASSWORD"
     password = os.getenv(variable)
