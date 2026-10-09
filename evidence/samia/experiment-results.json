@@ -1,0 +1,314 @@
+ [
+  {
+    "id": 1,
+    "project_id": 1,
+    "authorization_mode": "connection-only",
+    "cutoff_seconds": 1,
+    "status": "succeeded",
+    "attempt_count": 1,
+    "max_attempts": 3,
+    "result": "fail",
+    "error": null,
+    "created_at": "2026-10-02T11:51:32.903264",
+    "started_at": "2026-10-02T11:57:13.520785",
+    "completed_at": "2026-10-02T11:57:14.788982",
+    "events": [
+      {
+        "sequence": 1,
+        "type": "alice_authenticated",
+        "detail": "Alice authenticated as user 2",
+        "occurred_at": "2026-10-02T11:57:13.681921"
+      },
+      {
+        "sequence": 2,
+        "type": "websocket_connected",
+        "detail": "Opened connection-only connection",
+        "occurred_at": "2026-10-02T11:57:13.703019"
+      },
+      {
+        "sequence": 3,
+        "type": "access_revoked",
+        "detail": "Alice removed; cutoff is 1 seconds",
+        "occurred_at": "2026-10-02T11:57:13.766343"
+      },
+      {
+        "sequence": 4,
+        "type": "private_message_created",
+        "detail": "Created EXPERIMENT-1-A1 after the cutoff",
+        "occurred_at": "2026-10-02T11:57:14.777860"
+      },
+      {
+        "sequence": 5,
+        "type": "websocket_observation",
+        "detail": "{\"message\": {\"content\": \"Private data created after access removal\", \"created_at\": \"2026-10-02T11:57:14.774562\", \"id\": 1, \"message_code\": \"EXPERIMENT-1-A1\"}, \"type\": \"private_message\"}",
+        "occurred_at": "2026-10-02T11:57:14.777915"
+      },
+      {
+        "sequence": 6,
+        "type": "cleanup_completed",
+        "detail": "Restored Alice; HTTP 200",
+        "occurred_at": "2026-10-02T11:57:14.784449"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "project_id": 1,
+    "authorization_mode": "continuous",
+    "cutoff_seconds": 1,
+    "status": "succeeded",
+    "attempt_count": 1,
+    "max_attempts": 3,
+    "result": "pass",
+    "error": null,
+    "created_at": "2026-10-09T09:51:51.654242",
+    "started_at": "2026-10-09T09:51:52.135074",
+    "completed_at": "2026-10-09T09:51:53.452915",
+    "events": [
+      {
+        "sequence": 1,
+        "type": "alice_authenticated",
+        "detail": "Alice authenticated as user 2",
+        "occurred_at": "2026-10-09T09:51:52.329456"
+      },
+      {
+        "sequence": 2,
+        "type": "websocket_connected",
+        "detail": "Opened continuous connection",
+        "occurred_at": "2026-10-09T09:51:52.351782"
+      },
+      {
+        "sequence": 3,
+        "type": "access_revoked",
+        "detail": "Alice removed; cutoff is 1 seconds",
+        "occurred_at": "2026-10-09T09:51:52.413854"
+      },
+      {
+        "sequence": 4,
+        "type": "private_message_created",
+        "detail": "Created EXPERIMENT-2-A1 after the cutoff",
+        "occurred_at": "2026-10-09T09:51:53.438847"
+      },
+      {
+        "sequence": 5,
+        "type": "websocket_observation",
+        "detail": "{\"detail\": \"Project access has been removed\", \"type\": \"access_revoked\"}",
+        "occurred_at": "2026-10-09T09:51:53.438940"
+      },
+      {
+        "sequence": 6,
+        "type": "cleanup_completed",
+        "detail": "Restored Alice; HTTP 200",
+        "occurred_at": "2026-10-09T09:51:53.447369"
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "project_id": 1,
+    "authorization_mode": "connection-only",
+    "cutoff_seconds": 5,
+    "status": "succeeded",
+    "attempt_count": 1,
+    "max_attempts": 3,
+    "result": "fail",
+    "error": null,
+    "created_at": "2026-10-09T10:04:21.851202",
+    "started_at": "2026-10-09T10:04:22.145379",
+    "completed_at": "2026-10-09T10:04:27.359257",
+    "events": [
+      {
+        "sequence": 1,
+        "type": "alice_authenticated",
+        "detail": "Alice authenticated as user 2",
+        "occurred_at": "2026-10-09T10:04:22.262449"
+      },
+      {
+        "sequence": 2,
+        "type": "websocket_connected",
+        "detail": "Opened connection-only connection",
+        "occurred_at": "2026-10-09T10:04:22.266722"
+      },
+      {
+        "sequence": 3,
+        "type": "access_revoked",
+        "detail": "Alice removed; cutoff is 5 seconds",
+        "occurred_at": "2026-10-09T10:04:22.326636"
+      },
+      {
+        "sequence": 4,
+        "type": "private_message_created",
+        "detail": "Created EXPERIMENT-3-A1 after the cutoff",
+        "occurred_at": "2026-10-09T10:04:27.345101"
+      },
+      {
+        "sequence": 5,
+        "type": "websocket_observation",
+        "detail": "{\"message\": {\"content\": \"Private data created after access removal\", \"created_at\": \"2026-10-09T10:04:27.341136\", \"id\": 3, \"message_code\": \"EXPERIMENT-3-A1\"}, \"type\": \"private_message\"}",
+        "occurred_at": "2026-10-09T10:04:27.345208"
+      },
+      {
+        "sequence": 6,
+        "type": "cleanup_completed",
+        "detail": "Restored Alice; HTTP 200",
+        "occurred_at": "2026-10-09T10:04:27.355914"
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "project_id": 1,
+    "authorization_mode": "continuous",
+    "cutoff_seconds": 5,
+    "status": "succeeded",
+    "attempt_count": 1,
+    "max_attempts": 3,
+    "result": "pass",
+    "error": null,
+    "created_at": "2026-10-09T10:13:13.597014",
+    "started_at": "2026-10-09T10:13:14.258466",
+    "completed_at": "2026-10-09T10:13:19.461447",
+    "events": [
+      {
+        "sequence": 1,
+        "type": "alice_authenticated",
+        "detail": "Alice authenticated as user 2",
+        "occurred_at": "2026-10-09T10:13:14.362972"
+      },
+      {
+        "sequence": 2,
+        "type": "websocket_connected",
+        "detail": "Opened continuous connection",
+        "occurred_at": "2026-10-09T10:13:14.373344"
+      },
+      {
+        "sequence": 3,
+        "type": "access_revoked",
+        "detail": "Alice removed; cutoff is 5 seconds",
+        "occurred_at": "2026-10-09T10:13:14.434118"
+      },
+      {
+        "sequence": 4,
+        "type": "private_message_created",
+        "detail": "Created EXPERIMENT-4-A1 after the cutoff",
+        "occurred_at": "2026-10-09T10:13:19.451048"
+      },
+      {
+        "sequence": 5,
+        "type": "websocket_observation",
+        "detail": "{\"detail\": \"Project access has been removed\", \"type\": \"access_revoked\"}",
+        "occurred_at": "2026-10-09T10:13:19.451143"
+      },
+      {
+        "sequence": 6,
+        "type": "cleanup_completed",
+        "detail": "Restored Alice; HTTP 200",
+        "occurred_at": "2026-10-09T10:13:19.459103"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "project_id": 1,
+    "authorization_mode": "connection-only",
+    "cutoff_seconds": 10,
+    "status": "succeeded",
+    "attempt_count": 1,
+    "max_attempts": 3,
+    "result": "fail",
+    "error": null,
+    "created_at": "2026-10-09T10:24:54.402686",
+    "started_at": "2026-10-09T10:24:54.854505",
+    "completed_at": "2026-10-09T10:25:05.040832",
+    "events": [
+      {
+        "sequence": 1,
+        "type": "alice_authenticated",
+        "detail": "Alice authenticated as user 2",
+        "occurred_at": "2026-10-09T10:24:54.948612"
+      },
+      {
+        "sequence": 2,
+        "type": "websocket_connected",
+        "detail": "Opened connection-only connection",
+        "occurred_at": "2026-10-09T10:24:54.953612"
+      },
+      {
+        "sequence": 3,
+        "type": "access_revoked",
+        "detail": "Alice removed; cutoff is 10 seconds",
+        "occurred_at": "2026-10-09T10:24:55.012395"
+      },
+      {
+        "sequence": 4,
+        "type": "private_message_created",
+        "detail": "Created EXPERIMENT-5-A1 after the cutoff",
+        "occurred_at": "2026-10-09T10:25:05.028179"
+      },
+      {
+        "sequence": 5,
+        "type": "websocket_observation",
+        "detail": "{\"message\": {\"content\": \"Private data created after access removal\", \"created_at\": \"2026-10-09T10:25:05.022911\", \"id\": 5, \"message_code\": \"EXPERIMENT-5-A1\"}, \"type\": \"private_message\"}",
+        "occurred_at": "2026-10-09T10:25:05.028282"
+      },
+      {
+        "sequence": 6,
+        "type": "cleanup_completed",
+        "detail": "Restored Alice; HTTP 200",
+        "occurred_at": "2026-10-09T10:25:05.038484"
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "project_id": 1,
+    "authorization_mode": "continuous",
+    "cutoff_seconds": 10,
+    "status": "succeeded",
+    "attempt_count": 1,
+    "max_attempts": 3,
+    "result": "pass",
+    "error": null,
+    "created_at": "2026-10-09T10:26:42.699261",
+    "started_at": "2026-10-09T10:26:43.233699",
+    "completed_at": "2026-10-09T10:26:53.435916",
+    "events": [
+      {
+        "sequence": 1,
+        "type": "alice_authenticated",
+        "detail": "Alice authenticated as user 2",
+        "occurred_at": "2026-10-09T10:26:43.340162"
+      },
+      {
+        "sequence": 2,
+        "type": "websocket_connected",
+        "detail": "Opened continuous connection",
+        "occurred_at": "2026-10-09T10:26:43.343940"
+      },
+      {
+        "sequence": 3,
+        "type": "access_revoked",
+        "detail": "Alice removed; cutoff is 10 seconds",
+        "occurred_at": "2026-10-09T10:26:43.405872"
+      },
+      {
+        "sequence": 4,
+        "type": "private_message_created",
+        "detail": "Created EXPERIMENT-6-A1 after the cutoff",
+        "occurred_at": "2026-10-09T10:26:53.424558"
+      },
+      {
+        "sequence": 5,
+        "type": "websocket_observation",
+        "detail": "{\"detail\": \"Project access has been removed\", \"type\": \"access_revoked\"}",
+        "occurred_at": "2026-10-09T10:26:53.424656"
+      },
+      {
+        "sequence": 6,
+        "type": "cleanup_completed",
+        "detail": "Restored Alice; HTTP 200",
+        "occurred_at": "2026-10-09T10:26:53.433614"
+      }
+    ]
+  }
+]
