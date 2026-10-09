@@ -1,4 +1,4 @@
-# Samia Experiment Summary
+ # Samia Experiment Summary
 
 ## Objective
 
@@ -8,16 +8,26 @@ Evaluate how `connection-only` and `continuous` authorization modes behave when 
 
 Six experiments were conducted using Project Red (project ID 1). The authorization modes were tested with cutoff intervals of 1, 5, and 10 seconds.
 
-| Experiment | Authorization Mode | Cutoff (seconds) | Result |
-|---|---|---:|---|
-| 1 | connection-only | 1 | FAIL |
-| 2 | continuous | 1 | PASS |
-| 3 | connection-only | 5 | FAIL |
-| 4 | continuous | 5 | PASS |
-| 5 | connection-only | 10 | FAIL |
-| 6 | continuous | 10 | PASS |
+## Experiment Results
+
+| Experiment | Authorization Mode | Cutoff (seconds) | Execution Status | Result |
+|---:|---|---:|---|---|
+| 1 | `connection-only` | 1 | Completed | **FAIL** |
+| 2 | `continuous` | 1 | Completed | **PASS** |
+| 3 | `connection-only` | 5 | Completed | **FAIL** |
+| 4 | `continuous` | 5 | Completed | **PASS** |
+| 5 | `connection-only` | 10 | Completed | **FAIL** |
+| 6 | `continuous` | 10 | Completed | **PASS** |
 
 All six experiments completed successfully at the execution level, with one attempt each and no reported execution errors. The `result` field represents the experiment outcome, not whether the experiment itself executed successfully.
+
+## Overall Outcome
+
+| Authorization Mode | Passed | Failed |
+|---|---:|---:|
+| `connection-only` | 0 | 3 |
+| `continuous` | 3 | 0 |
+| **Total** | **3** | **3** |
 
 ## Observations
 
