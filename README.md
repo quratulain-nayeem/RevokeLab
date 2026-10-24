@@ -1,180 +1,155 @@
 # RevokeLab
 
-RevokeLab is a running-system authorization testing service that detects access which survives after a user’s permission is removed.
+**Verify that revoked access actually stops.**
 
-It opens an authenticated live connection, revokes the user, creates new private data after a declared cutoff, and records whether that data still reaches the removed user.
+RevokeLab is an automated access-revocation testing project for cloud-hosted applications. It investigates whether removed collaborators or compromised accounts can continue accessing protected information through existing sessions, HTTP endpoints, or realtime connections.
 
-- Repository: https://github.com/quratulain-nayeem/RevokeLab
-- Live API: https://revokelab.onrender.com
-- Interactive API documentation: `/docs`
-- Health check: `/health`
+The current prototype demonstrates WebSocket revocation failures and records experiment outcomes with an evidence timeline. The expanded design adds distributed cloud experiments, Redis coordination, authorized control users, and a PHP application target for session and permission-revocation testing.
+
+[Repository](https://github.com/quratulain-nayeem/RevokeLab) · [Hosted API documentation](https://revokelab.onrender.com/docs) · [Health endpoint](https://revokelab.onrender.com/health)
 
 ## The problem
 
-Removing a user from a permissions table does not guarantee that every access path stops immediately. Existing WebSocket connections, cached permissions, delayed invalidation, or queued work can continue exposing private data.
+Updating a permission record does not automatically invalidate every existing access path. A connection may retain permissions checked at login, an instance may use stale authorization data, or a revocation notification may arrive late.
 
-RevokeLab produces a short, reproducible timeline showing exactly what happened after access was revoked.
+RevokeLab asks:
 
-## Demonstrated result
+> After access is revoked and the allowed enforcement deadline expires, can the revoked user still obtain newly created protected information?
 
-RevokeLab provides two WebSocket authorization modes:
+The goal is reproducible verification: demonstrate a failure, change the enforcement strategy, and repeat the experiment to evaluate the fix.
 
-- `connection-only`: permission is checked only when the connection opens. This intentionally demonstrates a delayed-revocation failure.
-- `continuous`: permission is checked before each private message is delivered. Revoked users receive an `access_revoked` event instead of private data.
+## Implementation status
 
-A failed security policy and a failed worker are different:
+This table distinguishes the repository's current implementation from the expanded project scope.
 
-- `status: succeeded, result: fail` means the experiment completed and found an authorization failure.
-- `status: failed` means the experiment itself could not complete.
+| Capability | Status |
+|---|---|
+| FastAPI application with authenticated HTTP endpoints | Implemented |
+| Connection-only versus per-message WebSocket authorization | Implemented |
+| Database-backed experiment queue, retries, and event timelines | Implemented |
+| Configurable cutoff of 1–60 seconds | Implemented |
+| Pass, fail, and inconclusive outcomes | Implemented |
+| Render configuration with PostgreSQL and an integrated worker | Included |
+| Automated HTTP and WebSocket probes across multiple cloud instances | Planned extension |
+| Redis coordination and permission-cache experiments | Planned extension |
+| Authorized control receivers and exact test-message matching in the runner | Planned extension |
+| Delayed notifications and application-instance restart experiments | Planned extension |
+| PHP session and permission-revocation target | Planned extension |
+| Compromised-credential containment scenarios | Planned extension |
+
+## How the current experiment works
+
+1. An authenticated client submits an experiment with an `Idempotency-Key`.
+2. The API stores the job and returns `202 Accepted`.
+3. The worker authenticates the configured test user and opens a WebSocket connection.
+4. An administrator revokes that user's project membership.
+5. The worker waits for the configured cutoff and creates a new private message.
+6. It observes the connection and records the outcome and timeline.
+7. Cleanup attempts to restore the test user's membership.
+
+The runner currently uses the configured Alice/admin accounts and project **1**. Use this seeded project for the current demonstration.
+
+### Authorization strategies
+
+| Mode | Behavior | Expected demonstration |
+|---|---|---|
+| `connection-only` | Checks authorization when the socket connects | Existing connections can receive private messages after membership is revoked |
+| `continuous` | Rechecks authorization before each private-message delivery | Sends `access_revoked` and closes the revoked user's connection |
+
+`continuous` checks access at message delivery; it does not immediately disconnect an idle socket when membership changes.
+
+### Reading results
+
+Job execution status and security outcome are separate:
+
+| Field/value | Meaning |
+|---|---|
+| `status: succeeded` | The experiment completed, regardless of its security outcome |
+| `result: fail` | The runner observed a private-message event after the cutoff |
+| `result: pass` | The runner observed an explicit `access_revoked` event |
+| `result: inconclusive` | The observation timed out or did not establish either outcome |
+| `status: failed` | Execution could not complete within the retry policy |
+
+A timeout is not proof of successful revocation. A passing result applies to the tested scenario and observation window, not every possible access path.
 
 ## Architecture
 
+### Current prototype
+
 ```mermaid
 flowchart LR
-    Client --> API[FastAPI API]
-    API --> DB[(PostgreSQL / SQLite)]
-    API --> WS[WebSocket manager]
-    API --> Queue[Experiment queue in database]
-    Worker[Durable async worker] --> Queue
-    Worker --> API
-    Worker --> WS
-    Worker --> Events[Timeline events]
-    Events --> DB
+    Client[Authenticated client] --> API[FastAPI API]
+    API --> DB[(PostgreSQL / local SQLite)]
+    API --> WS[In-process WebSocket manager]
+    Worker[Single experiment worker] --> DB
+    Worker -->|HTTP and WebSocket requests| API
+    Worker -->|Results and timeline| DB
 ```
 
-The HTTP request only validates and queues an experiment, returning `202 Accepted` immediately. The durable worker performs the slower revocation test afterward.
+The database persists experiment jobs. The worker can run within the API process or separately. WebSocket connections and broadcasts currently belong to one application process.
 
-## Data model
+### Expanded cloud design — planned
 
-### `users`
-
-Stores accounts, password hashes, account status, and the `member` or `admin` role.
-
-Relationships:
-
-- A user can create projects.
-- A user can have project memberships.
-- A user can send messages.
-- A user can own experiment runs.
-
-### `projects`
-
-Represents a private workspace containing members and messages.
-
-Relationships:
-
-- Created by one user.
-- Has many memberships, messages, and experiments.
-
-### `memberships`
-
-Connects users to projects and records whether access is `active` or `revoked`.
-
-Constraints:
-
-- `(user_id, project_id)` is unique, preventing duplicate memberships.
-- Status is restricted to `active` or `revoked`.
-- Foreign keys prevent memberships from referencing nonexistent users or projects.
-
-### `messages`
-
-Stores private project messages.
-
-Constraints:
-
-- `message_code` is unique, making message creation safe to retry.
-- Foreign keys require valid projects and senders.
-
-### `experiment_runs`
-
-Stores queued and completed authorization experiments.
-
-Important fields include authorization mode, cutoff, status, attempt count, result, and structured failure information.
-
-Constraints:
-
-- `(owner_id, idempotency_key)` is unique, preventing duplicate jobs.
-- Authorization mode is restricted to supported modes.
-- Status is restricted to the worker lifecycle states.
-- The cutoff must be between 1 and 60 seconds.
-
-### `experiment_events`
-
-Stores the ordered evidence timeline for each experiment.
-
-Constraints:
-
-- `(experiment_id, sequence)` is unique, ensuring an unambiguous event order.
-- Each event must reference an existing experiment.
-
-## Authentication and authorization
-
-Passwords are hashed using Argon2 and never stored as plaintext.
-
-Session cookies protect authenticated routes:
-
-- Missing or invalid authentication returns `401`.
-- A user without active project access receives `403`.
-- Experiments are visible only to their owner or an administrator.
-- Unauthorized experiment lookups return `404` to avoid revealing whether another user’s record exists.
-- Only administrators can grant or revoke memberships.
-
-## Retry-safe writes
-
-### Message creation
-
-Clients provide a unique `message_code`. Repeating the same request returns the original message instead of creating a duplicate.
-
-### Experiment creation
-
-Clients provide an `Idempotency-Key` header.
-
-- Repeating the same key and payload returns the original experiment.
-- Reusing the key with a changed payload returns `409 Conflict`.
-- The database unique constraint prevents concurrent duplicate creation.
-
-## Worker lifecycle and crash recovery
-
-Experiment states are:
-
-```text
-queued -> running -> succeeded
-                  -> queued for retry
-                  -> failed after maximum attempts
+```mermaid
+flowchart LR
+    Runner[RevokeLab runner] --> LB[Load balancer]
+    LB --> A[Application instance A]
+    LB --> B[Application instance B]
+    A --> DB[(Shared permission database)]
+    B --> DB
+    A <--> Redis[(Redis coordination and cache)]
+    B <--> Redis
+    Runner --> PHP[PHP test application]
+    PHP --> DB
+    PHP <--> Redis
+    Control[Authorized control client] --> LB
+    Runner --> Evidence[Evidence and comparison reports]
 ```
 
-Before execution, the worker commits `status=running` and increments the attempt counter.
+The expanded environment will provide instance identifiers and controlled per-instance probe paths. Redis will support experiments with cache validity, revocation notifications, and cross-instance message delivery. The shared database remains the source of permission state.
 
-If the worker dies halfway through:
+Experiments will compare normal operation with delayed notifications and instance restarts. Authorized control clients will confirm that protected information remains available to legitimate users while revoked clients are tested.
 
-1. The experiment remains durably stored as `running`.
-2. A replacement worker searches for both `queued` and interrupted `running` jobs.
-3. It adds a `worker_recovered` timeline event.
-4. It retries the experiment.
-5. After three unsuccessful attempts, the job becomes `failed` with an actionable error code.
+## PHP application revocation testing — planned
 
-Completed jobs are not claimed again. Repeating the original HTTP request returns the same experiment because of its idempotency key.
+A small PHP application will serve as another target. RevokeLab remains the test orchestrator; it does not need to be rewritten in PHP.
 
-## API endpoints
+The target will provide login, protected synthetic records, and administrator-controlled revocation. Paired flawed and corrected implementations will support these experiments:
 
-| Method | Endpoint | Purpose |
+| Scenario | Failure to reproduce | Enforcement to verify |
 |---|---|---|
-| `POST` | `/auth/login` | Create an authenticated session |
-| `POST` | `/auth/logout` | End the session |
-| `GET` | `/auth/me` | Read the current account |
-| `GET` | `/projects/{id}` | Read an authorized project |
-| `POST` | `/projects/{id}/messages` | Create a retry-safe message |
-| `POST` | `/projects/{id}/members/{user_id}/revoke` | Revoke membership |
-| `POST` | `/projects/{id}/members/{user_id}/grant` | Restore membership |
-| `POST` | `/experiments` | Queue an experiment |
-| `GET` | `/experiments/{id}` | Read result and timeline |
-| WebSocket | `/ws/connection-only/projects/{id}` | Demonstrate stale connection access |
-| WebSocket | `/ws/continuous/projects/{id}` | Enforce continuous authorization |
-| `GET` | `/health` | Deployment health check |
+| Account disabled | Existing sessions retain access | Protected requests reject the disabled account |
+| Permission removed | A session uses permissions saved at login | Current permissions or their version are checked |
+| All sessions revoked | Only one session loses access | Every session covered by the action is rejected |
+| Cache invalidation delayed | One instance accepts stale permissions | Access stops within the configured deadline |
 
-## Local setup
+The runner will preserve a test session cookie, trigger revocation, create a fresh record, and probe each instance. Evidence will identify the record, serving instance, observation time, and authorization decision.
 
-Requires Python 3.12.
+This module tests **revocation vulnerabilities in PHP applications**. It is not a general PHP vulnerability scanner and does not claim to reproduce an unidentified PHP CVE.
+
+## Compromised-credential containment — planned
+
+A simulated attacker will use a copy of a test credential. After the credential or its associated access is revoked, RevokeLab will check whether protected HTTP requests and established realtime connections still work.
+
+This evaluates containment after credential exposure. It does not detect malicious packages, establish that a compromised server has been cleaned up, or recover previously disclosed data.
+
+## Evaluation plan
+
+Repeated experiments will compare enforcement strategies under normal operation and controlled cloud failures.
+
+- **Reference time:** record acknowledgement of revocation and the configured deadline.
+- **Fresh evidence:** create uniquely identified protected records and match observations to those identifiers.
+- **Access window:** measure observed time until enforcement, reporting probe intervals and timing uncertainty.
+- **Post-deadline disclosure:** count fresh protected records received beyond the deadline.
+- **Instance consistency:** identify instances that enforce revocation late or inconsistently.
+- **Control availability:** confirm authorized users can still access the test data.
+- **Repeatability:** retain scenario configuration, instance identity, attempt number, timestamps, and outcome.
+
+The current runner uses a cutoff followed by a single observation. Repeated probing, exact identifier matching, and control-client validation are required before claiming precise revocation latency or comprehensive distributed enforcement.
+
+## Run locally
+
+Use Python 3.12. These commands are for PowerShell:
 
 ```powershell
 git clone https://github.com/quratulain-nayeem/RevokeLab.git
@@ -182,110 +157,134 @@ cd RevokeLab
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-Copy `.env.example` to `.env`, replace the placeholder values, and never commit `.env`.
+Edit `.env` before starting:
 
-Seed the database:
+| Setting | Purpose |
+|---|---|
+| `REVOKELAB_SESSION_SECRET` | Random secret for signing session cookies |
+| `DATABASE_URL` | Local SQLite URL or PostgreSQL connection URL |
+| `REVOKELAB_BASE_URL` | API origin used by the worker; locally `http://127.0.0.1:8000` |
+| `REVOKELAB_ADMIN_USERNAME`, `REVOKELAB_ADMIN_PASSWORD` | Administrator test account |
+| `REVOKELAB_ALICE_USERNAME`, `REVOKELAB_ALICE_PASSWORD` | Revoked-user test account |
+| `REVOKELAB_BOB_PASSWORD` | Additional seeded account password |
+| `REVOKELAB_RUN_WORKER` | Enable the integrated worker when `true` |
+| `REVOKELAB_SECURE_COOKIES` | `true` for HTTPS deployments; `false` for local HTTP |
+
+Replace all placeholder secrets and passwords. Keep `.env` out of version control.
+
+Seed the database and start the API:
 
 ```powershell
 python seed.py
-```
-
-Start the API:
-
-```powershell
 uvicorn app.main:app --reload
 ```
 
-Open http://127.0.0.1:8000/docs.
+Open [local API documentation](http://127.0.0.1:8000/docs).
 
-For manual worker execution:
+With `REVOKELAB_RUN_WORKER=false`, open another terminal, activate the same environment, and start the worker:
 
 ```powershell
-python worker.py --once
+python worker.py
 ```
 
-For an always-running local worker, omit `--once`.
+Use `python worker.py --once` to process at most one available job. Run only one worker; do not enable both the integrated worker and a separate worker.
+
+### Submit an experiment
+
+Authenticate through `POST /auth/login`, then use the same authenticated session to call `POST /experiments`.
+
+Header:
+
+```text
+Idempotency-Key: demo-connection-only-001
+```
+
+Body:
+
+```json
+{
+  "project_id": 1,
+  "authorization_mode": "connection-only",
+  "cutoff_seconds": 5
+}
+```
+
+Read the returned ID through `GET /experiments/{id}`. Repeat with `authorization_mode: continuous` and a new idempotency key to compare behavior. Wait for the first run and cleanup to finish before starting the comparison.
+
+Reusing a key with the same request returns the existing experiment. Reusing it with a different request returns `409 Conflict`.
+
+## API reference
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/auth/login` | Create an authenticated session |
+| `POST` | `/auth/logout` | End the calling session |
+| `GET` | `/auth/me` | Read the current account |
+| `GET` | `/projects/{id}` | Read an authorized project |
+| `POST` | `/projects/{id}/messages` | Create a message with a unique `message_code` |
+| `POST` | `/projects/{id}/members/{user_id}/revoke` | Revoke membership as an administrator |
+| `POST` | `/projects/{id}/members/{user_id}/grant` | Restore membership as an administrator |
+| `POST` | `/experiments` | Queue an experiment |
+| `GET` | `/experiments/{id}` | Read its result and timeline |
+| WebSocket | `/ws/connection-only/projects/{id}` | Check authorization at connection time |
+| WebSocket | `/ws/continuous/projects/{id}` | Recheck authorization at private-message delivery |
+| `GET` | `/health` | Basic service health response |
+
+## Cloud deployment
+
+The repository includes `render.yaml` for a FastAPI web service, PostgreSQL database, generated session secret, HTTPS-only cookies, and an integrated worker.
+
+1. Deploy the repository using the Render Blueprint configuration.
+2. Supply the administrator, Alice, and Bob test-account passwords.
+3. Explicitly set `REVOKELAB_BASE_URL` to the deployed API origin, such as `https://revokelab.onrender.com`.
+4. Check `/health`, open `/docs`, and run one experiment in each authorization mode.
+
+The current worker reads `REVOKELAB_BASE_URL` directly, and the Blueprint does not declare it. Set it in the service environment before running experiments.
+
+This configuration is the cloud baseline. Multi-instance coordination, Redis, the PHP target, and fault injection require additional implementation and deployment configuration. Hosting availability and plan requirements depend on the provider.
+
+## Persistence and recovery
+
+The database stores users, projects, memberships, messages, experiment runs, and ordered experiment events. Unique constraints support retry-safe message creation and experiment submission; foreign keys preserve relationships.
+
+The single worker persists attempt counts and job state. It can retry queued or interrupted jobs and records recovery events, with a default maximum of three attempts.
+
+```text
+queued -> running -> succeeded
+                  -> queued for retry
+                  -> failed after maximum attempts
+```
+
+Experiment records are restricted to their owner or an administrator. Passwords are hashed with Argon2.
 
 ## Tests
-
-Run:
 
 ```powershell
 pytest -v
 ```
 
-The automated suite verifies:
+The repository contains tests for authentication, password hashing, project isolation, message idempotency, membership revocation and restoration, both WebSocket authorization modes, and experiment submission/idempotency behavior.
 
-- Password hashing and incorrect-login handling.
-- Authentication requirements.
-- Project isolation.
-- Retry-safe message creation.
-- Idempotent revoke and grant operations.
-- The connection-only revocation failure.
-- Continuous authorization blocking.
-- Retry-safe experiment creation.
-- Idempotency-key conflicts.
-- Unauthenticated experiment rejection.
+Distributed failure scenarios and PHP-target tests will be added alongside their implementations. Existing tests do not establish end-to-end cloud reliability.
 
-## Deployment
+## Current limitations and next steps
 
-`render.yaml` defines:
+- **Single-process messaging:** WebSocket state is in memory; broadcasts do not span replicas.
+- **Single experiment worker:** concurrent workers require safe transactional job claiming and coordinated recovery.
+- **Fixed target:** the runner targets project 1 and configured accounts, even though experiment submissions accept a project ID.
+- **Limited observation:** the runner classifies an event by type; exact message-ID matching and a control receiver remain to be added.
+- **Recovery isolation:** interrupted runs may leave membership state changed; restoring a known baseline before each attempt needs strengthening.
+- **Target adapters:** PHP and other external applications need explicit login, revocation, and protected-resource integrations.
 
-- A public FastAPI web service.
-- A PostgreSQL database.
-- Secure generated session secrets.
-- Non-committed account passwords.
-- HTTPS-only session cookies.
-- The integrated durable worker.
-- A `/health` deployment check.
+Priorities are to strengthen experiment isolation and evidence checks, add HTTP probes and control clients, introduce shared cloud coordination, and then integrate the PHP target and fault experiments.
 
-Deploy it as a Render Blueprint and provide the three requested test-account passwords. No secret is committed to the repository.
+## Intended use
 
-## Current limitations
+Run experiments against owned or explicitly authorized test environments using synthetic records and dedicated accounts. Keep deliberately flawed targets isolated from production data.
 
-This portfolio version intentionally uses one worker process. Multiple workers would require transactional row claiming, such as PostgreSQL `FOR UPDATE SKIP LOCKED`.
-## Named database constraints
+## License
 
-| Constraint | Rule enforced |
-|---|---|
-| `users.username UNIQUE` | Prevents two accounts from using the same username |
-| `ck_users_valid_role` | Allows only `member` or `admin` roles |
-| `uq_memberships_user_project` | Prevents duplicate membership rows |
-| `ck_memberships_valid_status` | Allows only `active` or `revoked` membership states |
-| `messages.message_code UNIQUE` | Prevents duplicate messages when a request is retried |
-| `uq_experiment_runs_owner_idempotency` | Prevents one user from creating duplicate jobs with the same idempotency key |
-| `ck_experiment_runs_authorization_mode` | Restricts experiments to supported authorization modes |
-| `ck_experiment_runs_status` | Restricts jobs to valid lifecycle states |
-| `ck_experiment_runs_cutoff` | Requires a cutoff between 1 and 60 seconds |
-| `uq_experiment_events_sequence` | Prevents duplicate timeline positions within an experiment |
-| Foreign-key constraints | Prevent orphaned memberships, messages, experiments, and timeline events |
-
-## Load-bearing query and query plan
-
-The worker repeatedly claims the oldest queued or interrupted experiment:
-
-```sql
-SELECT id, status, created_at
-FROM experiment_runs
-WHERE status IN ('queued', 'running')
-ORDER BY created_at
-LIMIT 1;
-```
-
-Measured locally with SQLite `EXPLAIN QUERY PLAN`:
-
-```text
-SEARCH experiment_runs USING INDEX ix_experiment_runs_status (status=?)
-USE TEMP B-TREE FOR ORDER BY
-```
-
-The `ix_experiment_runs_status` index avoids scanning completed experiments. However, SQLite still creates a temporary B-tree to order matching jobs by creation time.
-
-## What would fail first at ten times the data?
-
-The worker-claim query would degrade first as the queue grows. Its status index filters eligible jobs, but it does not satisfy the `ORDER BY created_at`, so increasingly large queued-job sets must be sorted repeatedly.
-
-At higher scale, I would add a composite index on `(status, created_at)` and use PostgreSQL transactional claiming with `FOR UPDATE SKIP LOCKED`. That would allow multiple workers to claim different jobs safely without duplicate processing or repeated full queue sorting.
-The current integration targets HTTP and WebSocket access paths. Future versions could add permission-cache invalidation, background task credentials, multi-instance testing, and controlled network fault injection.
+This project is licensed under the [MIT License](LICENSE).
